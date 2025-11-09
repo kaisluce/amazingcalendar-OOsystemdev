@@ -1,0 +1,21 @@
+syntax = "proto3";
+package notification;
+
+service NotificationService {
+  rpc NotifyEvent (EventMessage) returns (NotifyResponse);
+  rpc NotifyInvitation (InviteMessage) returns (NotifyResponse);
+}
+
+message EventMessage {
+  string title = 1;
+  string creator = 2;
+}
+
+message InviteMessage {
+  string email = 1;
+  string eventTitle = 2;
+}
+
+message NotifyResponse {
+  string status = 1;
+}
