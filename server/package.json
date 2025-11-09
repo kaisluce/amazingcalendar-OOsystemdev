@@ -1,0 +1,25 @@
+{
+  "name": "amazing-calendar-server",
+  "version": "1.0.0",
+  "description": "Node.js backend for Amazing Calendar",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "5.18.0",
+    "bcrypt": "5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.19.2",
+    "jsonwebtoken": "9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "3.1.7",
+    "prisma": "5.18.0"
+  }
+}

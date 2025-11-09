@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int                 @id @default(autoincrement())
+  name             String
+  email            String              @unique
+  password         String
+  createdEvents    Event[]             @relation("EventCreator")
+  participantSlots EventParticipant[]
+}
+
+model Event {
+  id            Int                 @id @default(autoincrement())
+  title         String
+  description   String?
+  startTime     DateTime
+  endTime       DateTime
+  location      String?
+  createdBy     User                @relation("EventCreator", fields: [createdById], references: [id])
+  createdById   Int
+  participants  EventParticipant[]
+}
+
+model EventParticipant {
+  id      Int    @id @default(autoincrement())
+  status  ParticipantStatus @default(INVITED)
+  event   Event  @relation(fields: [eventId], references: [id])
+  eventId Int
+  user    User   @relation(fields: [userId], references: [id])
+  userId  Int
+
+  @@unique([eventId, userId])
+}
+
+enum ParticipantStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+}

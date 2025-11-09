@@ -4,6 +4,7 @@
       <router-link to="/">Accueil</router-link>
       <router-link to="/about">À propos</router-link>
       <router-link to="/login">Connexion</router-link>
+      <router-link to="/register">Inscription</router-link>
     </nav>
 
     <router-view />
