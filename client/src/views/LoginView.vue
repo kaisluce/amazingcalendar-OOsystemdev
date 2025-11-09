@@ -39,7 +39,9 @@
 </template>
 
 <script>
-const API_BASE_URL = (process.env.VUE_APP_BACKEND_URL || '')
+const API_BASE_URL = (process.env.VUE_APP_BACKEND_URL || '').replace(/\/$/, '')
+const TOKEN_KEY = 'ac_token'
+const USER_KEY = 'ac_user'
 
 export default {
   name: 'LoginView',
@@ -70,9 +72,22 @@ export default {
           })
         })
 
-        const text = await response.text()
-        this.hasError = !response.ok
-        this.message = text
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          this.hasError = true
+          this.message = payload.message || 'Identifiants invalides'
+          return
+        }
+
+        localStorage.setItem(TOKEN_KEY, payload.token)
+        if (payload.user) {
+          localStorage.setItem(USER_KEY, JSON.stringify(payload.user))
+        }
+        this.hasError = false
+        this.message = 'Connexion réussie, redirection...'
+        setTimeout(() => {
+          this.$router.push('/')
+        }, 600)
       } catch (error) {
         console.error('Login error', error)
         this.hasError = true

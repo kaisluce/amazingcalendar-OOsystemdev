@@ -1,11 +1,12 @@
 const {
   listEvents,
-  createEventWithCreatorEmail,
+  createEventForUser,
   inviteParticipant,
   listParticipants,
   listEventsForUser,
   getUpcomingEvents,
-  getPastEvents
+  getPastEvents,
+  updateEvent
 } = require('../services/eventService');
 
 async function getEvents(req, res) {
@@ -21,24 +22,27 @@ async function getEvents(req, res) {
 
 async function postEvent(req, res) {
   try {
-    const { title, description, startTime, endTime, location, createdByEmail } = req.body;
-    if (!title || !startTime || !endTime || !createdByEmail) {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const { title, description, startTime, endTime, location } = req.body;
+    if (!title || !startTime || !endTime) {
       console.warn('[EventController] postEvent missing fields', {
         title: !!title,
         startTime,
-        endTime,
-        createdByEmail
+        endTime
       });
-      return res.status(400).json({ message: 'Title, startTime, endTime, and createdByEmail are required' });
+      return res.status(400).json({ message: 'Title, startTime, and endTime are required' });
     }
-    console.log('[EventController] postEvent attempt', { title, createdByEmail });
-    const event = await createEventWithCreatorEmail({
+    console.log('[EventController] postEvent attempt', { title, userId });
+    const event = await createEventForUser({
       title,
       description,
       startTime,
       endTime,
       location,
-      createdByEmail
+      userId: Number(userId)
     });
     return res.status(201).json(event);
   } catch (error) {
@@ -127,6 +131,41 @@ async function getPast(req, res) {
   }
 }
 
+async function putEvent(req, res) {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { eventId } = req.params;
+    const payload = req.body || {};
+
+    if (!payload.title && !payload.description && !payload.startTime && !payload.endTime && !payload.location) {
+      return res.status(400).json({ message: 'At least one field is required to update' });
+    }
+
+    const updated = await updateEvent({
+      eventId,
+      userId: Number(userId),
+      payload
+    });
+    return res.json(updated);
+  } catch (error) {
+    if (error.code === 'EVENT_NOT_FOUND') {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    if (error.code === 'FORBIDDEN') {
+      return res.status(403).json({ message: 'You are not allowed to modify this event' });
+    }
+    if (error.code === 'NO_UPDATES') {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+    console.error('[EventController] putEvent error', error.message);
+    return res.status(400).json({ message: 'Unable to update event' });
+  }
+}
+
 module.exports = {
   getEvents,
   postEvent,
@@ -134,5 +173,6 @@ module.exports = {
   getParticipants,
   getUserEvents,
   getUpcoming,
-  getPast
+  getPast,
+  putEvent
 };

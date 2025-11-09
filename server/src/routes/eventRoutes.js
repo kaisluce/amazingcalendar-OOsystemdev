@@ -6,17 +6,19 @@ const {
   getParticipants,
   getUserEvents,
   getUpcoming,
-  getPast
+  getPast,
+  putEvent
 } = require('../controllers/eventController');
 const { authenticate } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 router.get('/', getEvents);
-router.post('/', postEvent);
+router.post('/', authenticate, postEvent);
 router.get('/user', getUserEvents);
 router.get('/upcoming', authenticate, getUpcoming);
 router.get('/past', authenticate, getPast);
+router.put('/:eventId', authenticate, putEvent);
 router.post('/:eventId/invite', inviteUser);
 router.get('/:eventId/participants', getParticipants);
 

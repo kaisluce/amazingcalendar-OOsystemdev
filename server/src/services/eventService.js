@@ -20,15 +20,15 @@ async function listEvents() {
   });
 }
 
-async function createEventWithCreatorEmail({ title, description, startTime, endTime, location, createdByEmail }) {
-  console.log('[EventService] createEventWithCreatorEmail payload', {
+async function createEventForUser({ title, description, startTime, endTime, location, userId }) {
+  console.log('[EventService] createEventForUser payload', {
     title,
     startTime,
     endTime,
-    createdByEmail
+    userId
   });
 
-  const creator = await prisma.user.findUnique({ where: { email: createdByEmail } });
+  const creator = await prisma.user.findUnique({ where: { id: userId } });
   if (!creator) {
     throw new Error('Creator not found');
   }
@@ -177,12 +177,61 @@ async function getPastEvents(userId) {
   });
 }
 
+async function updateEvent({ eventId, userId, payload }) {
+  console.log('[EventService] updateEvent', { eventId, userId });
+  const event = await prisma.event.findUnique({
+    where: { id: Number(eventId) },
+    include: {
+      participants: true
+    }
+  });
+
+  if (!event) {
+    const err = new Error('Event not found');
+    err.code = 'EVENT_NOT_FOUND';
+    throw err;
+  }
+
+  const isCreator = event.createdById === userId;
+  const isParticipant = event.participants.some((p) => p.userId === userId);
+
+  if (!isCreator && !isParticipant) {
+    const err = new Error('Forbidden');
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  const data = {};
+  ['title', 'description', 'startTime', 'endTime', 'location'].forEach((field) => {
+    if (payload[field] !== undefined) {
+      if (field === 'startTime' || field === 'endTime') {
+        data[field] = new Date(payload[field]);
+      } else {
+        data[field] = payload[field];
+      }
+    }
+  });
+
+  if (Object.keys(data).length === 0) {
+    const err = new Error('No fields to update');
+    err.code = 'NO_UPDATES';
+    throw err;
+  }
+
+  return prisma.event.update({
+    where: { id: event.id },
+    data,
+    include: sanitizeEventInclude()
+  });
+}
+
 module.exports = {
   listEvents,
-  createEventWithCreatorEmail,
+  createEventForUser,
   inviteParticipant,
   listParticipants,
   listEventsForUser,
   getUpcomingEvents,
-  getPastEvents
+  getPastEvents,
+  updateEvent
 };
