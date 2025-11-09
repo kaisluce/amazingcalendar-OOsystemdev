@@ -3,6 +3,7 @@ const cors = require('cors');
 const { env } = require('./src/config/env');
 const authRoutes = require('./src/routes/authRoutes');
 const eventRoutes = require('./src/routes/eventRoutes');
+const notificationRoutes = require('./src/routes/notificationRoutes');
 const { requestLogger } = require('./src/middleware/requestLogger');
 
 const app = express();
@@ -17,6 +18,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found' });

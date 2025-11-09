@@ -39,6 +39,16 @@ model EventParticipant {
   @@unique([eventId, userId])
 }
 
+model Notification {
+  id         Int      @id @default(autoincrement())
+  type       String
+  title      String?
+  creator    String?
+  email      String?
+  eventTitle String?
+  createdAt  DateTime @default(now())
+}
+
 enum ParticipantStatus {
   INVITED
   ACCEPTED

@@ -8,6 +8,7 @@ const {
   getPastEvents,
   updateEvent
 } = require('../services/eventService');
+const { notifyEventCreated, notifyInvitation } = require('../../../grpc/grpc-client');
 
 async function getEvents(req, res) {
   try {
@@ -44,6 +45,8 @@ async function postEvent(req, res) {
       location,
       userId: Number(userId)
     });
+    notifyEventCreated(event.title, event.createdBy?.email || event.createdBy?.name || String(event.createdById))
+      .catch((err) => console.error('[EventController] notifyEventCreated failed', err.message || err));
     return res.status(201).json(event);
   } catch (error) {
     console.error('[EventController] postEvent error', error.message);
@@ -60,6 +63,8 @@ async function inviteUser(req, res) {
       return res.status(400).json({ message: 'Email is required' });
     }
     const participant = await inviteParticipant({ eventId, email });
+    notifyInvitation(email, participant.event?.title || 'Unknown event')
+      .catch((err) => console.error('[EventController] notifyInvitation failed', err.message || err));
     return res.status(201).json(participant);
   } catch (error) {
     if (error.code === 'USER_NOT_FOUND') {
