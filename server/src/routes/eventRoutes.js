@@ -7,7 +7,10 @@ const {
   getUserEvents,
   getUpcoming,
   getPast,
-  putEvent
+  putEvent,
+  respondInvitation,
+  removeEvent,
+  removeParticipant
 } = require('../controllers/eventController');
 const { authenticate } = require('../middleware/authMiddleware');
 
@@ -19,7 +22,10 @@ router.get('/user', getUserEvents);
 router.get('/upcoming', authenticate, getUpcoming);
 router.get('/past', authenticate, getPast);
 router.put('/:eventId', authenticate, putEvent);
-router.post('/:eventId/invite', inviteUser);
+router.delete('/:eventId', authenticate, removeEvent);
+router.post('/:eventId/invite', authenticate, inviteUser);
+router.post('/:eventId/respond', authenticate, respondInvitation);
 router.get('/:eventId/participants', getParticipants);
+router.delete('/:eventId/participants/:participantId', authenticate, removeParticipant);
 
 module.exports = router;

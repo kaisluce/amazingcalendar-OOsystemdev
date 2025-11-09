@@ -6,7 +6,10 @@ const {
   listEventsForUser,
   getUpcomingEvents,
   getPastEvents,
-  updateEvent
+  updateEvent,
+  deleteEvent,
+  updateParticipationStatus,
+  removeParticipant: removeParticipantService
 } = require('../services/eventService');
 const { notifyEventCreated, notifyInvitation } = require('../../../grpc/grpc-client');
 
@@ -62,7 +65,11 @@ async function inviteUser(req, res) {
     if (!email) {
       return res.status(400).json({ message: 'Email is required' });
     }
-    const participant = await inviteParticipant({ eventId, email });
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const participant = await inviteParticipant({ eventId, email, inviterId: Number(userId) });
     notifyInvitation(email, participant.event?.title || 'Unknown event')
       .catch((err) => console.error('[EventController] notifyInvitation failed', err.message || err));
     return res.status(201).json(participant);
@@ -72,6 +79,9 @@ async function inviteUser(req, res) {
     }
     if (error.code === 'ALREADY_INVITED') {
       return res.status(400).json({ message: 'Already invited' });
+    }
+    if (error.code === 'FORBIDDEN') {
+      return res.status(403).json({ message: 'Seul le créateur ou un participant ayant accepté peut inviter' });
     }
     if (error.message === 'Event not found') {
       return res.status(404).json({ message: 'Event not found' });
@@ -161,13 +171,86 @@ async function putEvent(req, res) {
       return res.status(404).json({ message: 'Event not found' });
     }
     if (error.code === 'FORBIDDEN') {
-      return res.status(403).json({ message: 'You are not allowed to modify this event' });
+      return res.status(403).json({ message: 'Seul le créateur ou un participant ayant accepté peut modifier cet évènement' });
     }
     if (error.code === 'NO_UPDATES') {
       return res.status(400).json({ message: 'No fields to update' });
     }
     console.error('[EventController] putEvent error', error.message);
     return res.status(400).json({ message: 'Unable to update event' });
+  }
+}
+
+async function respondInvitation(req, res) {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const { eventId } = req.params;
+    const { status } = req.body;
+    if (!['ACCEPTED', 'DECLINED'].includes(status)) {
+      return res.status(400).json({ message: 'Status must be ACCEPTED or DECLINED' });
+    }
+
+    const participation = await updateParticipationStatus({
+      eventId,
+      userId: Number(userId),
+      status
+    });
+    return res.json(participation);
+  } catch (error) {
+    if (error.code === 'PARTICIPATION_NOT_FOUND') {
+      return res.status(404).json({ message: 'Invitation not found' });
+    }
+    console.error('[EventController] respondInvitation error', error.message);
+    return res.status(400).json({ message: 'Unable to update participation' });
+  }
+}
+
+async function removeEvent(req, res) {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const { eventId } = req.params;
+    await deleteEvent({ eventId, userId: Number(userId) });
+    return res.json({ message: 'Event deleted' });
+  } catch (error) {
+    if (error.code === 'EVENT_NOT_FOUND') {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+    if (error.code === 'FORBIDDEN') {
+      return res.status(403).json({ message: 'Only the creator can delete this event' });
+    }
+    console.error('[EventController] removeEvent error', error.message);
+    return res.status(400).json({ message: 'Unable to delete event' });
+  }
+}
+
+async function removeParticipant(req, res) {
+  try {
+    const userId = req.user?.id || req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const { eventId, participantId } = req.params;
+    await removeParticipantService({
+      eventId,
+      participantId,
+      actorId: Number(userId)
+    });
+    return res.json({ message: 'Participant removed' });
+  } catch (error) {
+    if (error.code === 'PARTICIPATION_NOT_FOUND') {
+      return res.status(404).json({ message: 'Participant not found' });
+    }
+    if (error.code === 'FORBIDDEN') {
+      return res.status(403).json({ message: 'Action non autorisée' });
+    }
+    console.error('[EventController] removeParticipant error', error.message);
+    return res.status(400).json({ message: 'Unable to remove participant' });
   }
 }
 
@@ -179,5 +262,8 @@ module.exports = {
   getUserEvents,
   getUpcoming,
   getPast,
-  putEvent
+  putEvent,
+  respondInvitation,
+  removeEvent,
+  removeParticipant
 };

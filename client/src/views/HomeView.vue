@@ -31,12 +31,64 @@
                 v-for="event in upcomingEvents"
                 :key="event.id"
                 class="event-item"
-                @click="openEditForm(event)"
               >
-                <div class="event-title">{{ event.title }}</div>
-                <small>{{ formatDate(event.startTime) }} → {{ formatDate(event.endTime) }}</small>
+                <div class="event-header">
+                  <div>
+                    <div class="event-title">{{ event.title }}</div>
+                    <small>{{ formatDate(event.startTime) }} → {{ formatDate(event.endTime) }}</small>
+                    <div v-if="getCurrentStatus(event)" class="status-pill" :class="getCurrentStatus(event)">
+                      Statut: {{ getCurrentStatus(event) }}
+                    </div>
+                    <div v-if="showResponseButtons(event)" class="respond-row">
+                      <button class="primary sm" @click="respond(event.id, 'ACCEPTED')">Accepter</button>
+                      <button class="ghost sm" @click="respond(event.id, 'DECLINED')">Refuser</button>
+                    </div>
+                  </div>
+                  <div class="event-actions">
+                    <button class="ghost sm pointer" @click.stop="openEditForm(event)" :disabled="!canEdit(event)">Modifier</button>
+                    <button class="ghost sm pointer" @click.stop="toggleInvitePanel(event.id)">Invités</button>
+                    <button class="ghost sm danger pointer" @click.stop="confirmDelete(event)" :disabled="!canEdit(event)">Supprimer</button>
+                  </div>
+                </div>
                 <p class="event-description">{{ event.description || 'Pas de description' }}</p>
-                <button class="ghost sm">Modifier</button>
+                <div v-if="inviteState[event.id]?.open" class="invite-panel">
+                  <form v-if="canInvite(event)" @submit.prevent="submitInvite(event.id)">
+                    <input
+                      v-model="inviteState[event.id].email"
+                      type="email"
+                      placeholder="Email de l'invité"
+                      required
+                    />
+                    <button type="submit" class="primary sm" :disabled="inviteState[event.id].loading">
+                      {{ inviteState[event.id].loading ? 'Invitation...' : 'Inviter' }}
+                    </button>
+                  </form>
+                  <p v-if="inviteState[event.id].message" :class="['form-message', { error: inviteState[event.id].error }]">
+                    {{ inviteState[event.id].message }}
+                  </p>
+                  <div v-if="event.participants?.length" class="invited-list">
+                    <p>Invités :</p>
+                    <ul>
+                      <li v-for="participant in event.participants" :key="participant.id" class="participant-row">
+                        <span>{{ participant.user.email }} — {{ participant.status }}</span>
+                        <div class="participant-actions">
+                          <button
+                            v-if="canEdit(event) && participant.user.id !== user?.id"
+                            class="ghost sm pointer"
+                            @click.prevent="handleParticipantRemoval(event.id, participant)">
+                            Retirer
+                          </button>
+                          <button
+                            v-else-if="participant.user.id === user?.id"
+                            class="ghost sm"
+                            @click.prevent="handleParticipantRemoval(event.id, participant)">
+                            Quitter
+                          </button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </li>
             </ul>
           </div>
@@ -57,12 +109,64 @@
                 v-for="event in pastEvents"
                 :key="event.id"
                 class="event-item"
-                @click="openEditForm(event)"
               >
-                <div class="event-title">{{ event.title }}</div>
-                <small>{{ formatDate(event.startTime) }} → {{ formatDate(event.endTime) }}</small>
-                <p class="event-description">{{ event.description || 'Pas de description' }}</p>
-                <button class="ghost sm">Modifier</button>
+                <div class="event-header">
+                  <div>
+                    <div class="event-title">{{ event.title }}</div>
+                    <small>{{ formatDate(event.startTime) }} → {{ formatDate(event.endTime) }}</small>
+                    <div v-if="getCurrentStatus(event)" class="status-pill" :class="getCurrentStatus(event)">
+                      Statut: {{ getCurrentStatus(event) }}
+                    </div>
+                    <div v-if="showResponseButtons(event)" class="respond-row">
+                      <button class="primary sm" @click="respond(event.id, 'ACCEPTED')">Accepter</button>
+                      <button class="ghost sm" @click="respond(event.id, 'DECLINED')">Refuser</button>
+                    </div>
+                  </div>
+                  <div class="event-actions">
+                    <button class="ghost sm" @click.stop="openEditForm(event)" :disabled="!canEdit(event)">Modifier</button>
+                    <button class="ghost sm" @click.stop="toggleInvitePanel(event.id)">Invités</button>
+                    <button class="ghost sm danger" @click.stop="confirmDelete(event)" :disabled="!canEdit(event)">Supprimer</button>
+                  </div>
+                </div>
+               <p class="event-description">{{ event.description || 'Pas de description' }}</p>
+                <div v-if="inviteState[event.id]?.open" class="invite-panel">
+                  <form v-if="canInvite(event)" @submit.prevent="submitInvite(event.id)">
+                    <input
+                      v-model="inviteState[event.id].email"
+                      type="email"
+                      placeholder="Email de l'invité"
+                      required
+                    />
+                    <button type="submit" class="primary sm" :disabled="inviteState[event.id].loading">
+                      {{ inviteState[event.id].loading ? 'Invitation...' : 'Inviter' }}
+                    </button>
+                  </form>
+                  <p v-if="inviteState[event.id].message" :class="['form-message', { error: inviteState[event.id].error }]">
+                    {{ inviteState[event.id].message }}
+                  </p>
+                  <div v-if="event.participants?.length" class="invited-list">
+                    <p>Invités :</p>
+                    <ul>
+                      <li v-for="participant in event.participants" :key="participant.id" class="participant-row">
+                        <span>{{ participant.user.email }} — {{ participant.status }}</span>
+                        <div class="participant-actions">
+                          <button
+                            v-if="canEdit(event) && participant.user.id !== user?.id"
+                            class="ghost sm"
+                            @click.prevent="handleParticipantRemoval(event.id, participant)">
+                            Retirer
+                          </button>
+                          <button
+                            v-else-if="participant.user.id === user?.id"
+                            class="ghost sm"
+                            @click.prevent="handleParticipantRemoval(event.id, participant)">
+                            Quitter
+                          </button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </li>
             </ul>
           </div>
@@ -136,7 +240,9 @@ export default {
         location: ''
       },
       isEditing: false,
-      editingEventId: null
+      editingEventId: null,
+      inviteState: {},
+      responding: false
     }
   },
   created() {
@@ -152,7 +258,6 @@ export default {
       if (storedUser && storedToken) {
         this.user = JSON.parse(storedUser)
         this.token = storedToken
-        this.eventForm.createdByEmail = this.user.email
       }
     },
     async loadEvents() {
@@ -167,7 +272,9 @@ export default {
           }
         })
         if (!res.ok) throw new Error('Impossible de charger les événements à venir')
-        this.upcomingEvents = await res.json()
+        const data = await res.json()
+        this.upcomingEvents = data
+        this.populateParticipants(data)
       } catch (error) {
         console.error(error)
       } finally {
@@ -183,7 +290,9 @@ export default {
           }
         })
         if (!res.ok) throw new Error('Impossible de charger les événements passés')
-        this.pastEvents = await res.json()
+        const data = await res.json()
+        this.pastEvents = data
+        this.populateParticipants(data)
       } catch (error) {
         console.error(error)
       } finally {
@@ -223,6 +332,21 @@ export default {
         endTime: '',
         location: ''
       }
+    },
+    populateParticipants(events) {
+      events.forEach((event) => {
+        const existing = this.inviteState[event.id] || {}
+        this.inviteState = {
+          ...this.inviteState,
+          [event.id]: {
+            email: existing.email || '',
+            loading: false,
+            message: existing.message || '',
+            error: existing.error || false,
+            open: existing.open ?? false
+          }
+        }
+      })
     },
     openEditForm(event) {
       if (!this.user) return
@@ -277,6 +401,139 @@ export default {
         this.formMessage = error.message
       } finally {
         this.creating = false
+      }
+    },
+    toggleInvitePanel(eventId) {
+      const state = this.inviteState[eventId]
+      if (!state) {
+        this.inviteState = {
+          ...this.inviteState,
+          [eventId]: {
+            email: '',
+            loading: false,
+            message: '',
+            error: false,
+            open: true
+          }
+        }
+      } else {
+        state.open = !state.open
+      }
+    },
+    async submitInvite(eventId) {
+      const state = this.inviteState[eventId]
+      if (!state || !state.email) return
+      state.loading = true
+      state.message = ''
+      state.error = false
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/invite`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.token}`
+          },
+          body: JSON.stringify({ email: state.email })
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(data.message || 'Impossible d’inviter cet utilisateur')
+        }
+        state.message = 'Invitation envoyée !'
+        state.email = ''
+        await this.loadEvents()
+      } catch (error) {
+        state.error = true
+        state.message = error.message
+      } finally {
+        state.loading = false
+    }
+    },
+    findParticipant(event) {
+      if (!this.user) return null
+      return (event.participants || []).find((p) => p.user.id === this.user.id)
+    },
+    canEdit(event) {
+      if (!this.user) return false
+      return event.createdBy && event.createdBy.id === this.user.id
+    },
+    canInvite(event) {
+      return this.canEdit(event)
+    },
+    getCurrentStatus(event) {
+      const participant = this.findParticipant(event)
+      return participant ? participant.status : null
+    },
+    showResponseButtons(event) {
+      const participant = this.findParticipant(event)
+      return participant && participant.status === 'INVITED'
+    },
+    async respond(eventId, status) {
+      if (this.responding) return
+      this.responding = true
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/respond`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.token}`
+          },
+          body: JSON.stringify({ status })
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.message || 'Impossible de mettre à jour la participation')
+        }
+        await this.loadEvents()
+      } catch (error) {
+        alert(error.message)
+      } finally {
+        this.responding = false
+      }
+    },
+    async handleParticipantRemoval(eventId, participant) {
+      if (!this.user) return
+      const isSelf = participant.user.id === this.user.id
+      const message = isSelf
+        ? 'Souhaites-tu quitter cet évènement ?'
+        : `Supprimer ${participant.user.email} de l'évènement ?`
+      if (!window.confirm(message)) return
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events/${eventId}/participants/${participant.id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${this.token}`
+          }
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.message || 'Action impossible')
+        }
+        await this.loadEvents()
+      } catch (error) {
+        alert(error.message)
+      }
+    },
+    async confirmDelete(event) {
+      if (!this.canEdit(event)) {
+        return
+      }
+      const confirmed = window.confirm(`Supprimer l'évènement "${event.title}" ?`)
+      if (!confirmed) return
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/events/${event.id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${this.token}`
+          }
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.message || 'Impossible de supprimer cet évènement')
+        }
+        await this.loadEvents()
+      } catch (error) {
+        alert(error.message)
       }
     }
   }
@@ -345,20 +602,10 @@ export default {
   padding: 0.75rem 1rem;
 }
 
-.collapsible li button {
-  display: none;
-}
-
 .event-item {
   cursor: pointer;
   position: relative;
-  padding-bottom: 2.2rem;
-}
-
-.event-item button {
-  position: absolute;
-  right: 1rem;
-  bottom: 0.7rem;
+  padding-bottom: 1.5rem;
 }
 
 .event-title {
@@ -368,6 +615,39 @@ export default {
 .event-description {
   color: #475569;
   margin: 0.4rem 0 0;
+}
+
+.status-pill {
+  margin-top: 0.3rem;
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: #e2e8f0;
+  color: #1f2933;
+}
+
+.status-pill.ACCEPTED {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-pill.DECLINED {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill.INVITED {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.respond-row {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
 }
 
 .muted {
@@ -400,6 +680,23 @@ export default {
 .ghost.sm {
   padding: 0.3rem 0.8rem;
   font-size: 0.85rem;
+}
+
+.ghost.sm.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.event-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .modal-backdrop {
@@ -463,6 +760,46 @@ export default {
   color: #d93025;
 }
 
+.invite-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.invite-panel form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.invite-panel input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+}
+
+.invited-list {
+  margin-top: 0.75rem;
+}
+
+.invited-list ul {
+  list-style: disc;
+  padding-left: 1.2rem;
+  margin: 0.25rem 0 0;
+}
+
+.participant-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.participant-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
@@ -470,5 +807,9 @@ export default {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.pointer:hover {
+  cursor: pointer;
 }
 </style>

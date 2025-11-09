@@ -46,11 +46,19 @@ async function createEventForUser({ title, description, startTime, endTime, loca
   });
 }
 
-async function inviteParticipant({ eventId, email }) {
-  console.log('[EventService] inviteParticipant', { eventId, email });
-  const event = await prisma.event.findUnique({ where: { id: Number(eventId) } });
+async function inviteParticipant({ eventId, email, inviterId }) {
+  console.log('[EventService] inviteParticipant', { eventId, email, inviterId });
+  const event = await prisma.event.findUnique({
+    where: { id: Number(eventId) }
+  });
   if (!event) {
     throw new Error('Event not found');
+  }
+
+  if (event.createdById !== inviterId) {
+    const err = new Error('Only the creator can invite participants');
+    err.code = 'FORBIDDEN';
+    throw err;
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -193,9 +201,7 @@ async function updateEvent({ eventId, userId, payload }) {
   }
 
   const isCreator = event.createdById === userId;
-  const isParticipant = event.participants.some((p) => p.userId === userId);
-
-  if (!isCreator && !isParticipant) {
+  if (!isCreator) {
     const err = new Error('Forbidden');
     err.code = 'FORBIDDEN';
     throw err;
@@ -225,6 +231,80 @@ async function updateEvent({ eventId, userId, payload }) {
   });
 }
 
+async function updateParticipationStatus({ eventId, userId, status }) {
+  console.log('[EventService] updateParticipationStatus', { eventId, userId, status });
+  const participant = await prisma.eventParticipant.findUnique({
+    where: {
+      eventId_userId: {
+        eventId: Number(eventId),
+        userId: userId
+      }
+    }
+  });
+  if (!participant) {
+    const err = new Error('Participation not found');
+    err.code = 'PARTICIPATION_NOT_FOUND';
+    throw err;
+  }
+
+  return prisma.eventParticipant.update({
+    where: { id: participant.id },
+    data: { status },
+    include: {
+      event: { select: { id: true, title: true } },
+      user: { select: { id: true, email: true } }
+    }
+  });
+}
+
+async function deleteEvent({ eventId, userId }) {
+  console.log('[EventService] deleteEvent', { eventId, userId });
+  const event = await prisma.event.findUnique({ where: { id: Number(eventId) } });
+  if (!event) {
+    const err = new Error('Event not found');
+    err.code = 'EVENT_NOT_FOUND';
+    throw err;
+  }
+
+  if (event.createdById !== userId) {
+    const err = new Error('Forbidden');
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  await prisma.eventParticipant.deleteMany({ where: { eventId: event.id } });
+  await prisma.event.delete({ where: { id: event.id } });
+  return { success: true };
+}
+
+async function removeParticipant({ eventId, participantId, actorId }) {
+  console.log('[EventService] removeParticipant', { eventId, participantId, actorId });
+  const participant = await prisma.eventParticipant.findUnique({
+    where: { id: Number(participantId) },
+    include: {
+      event: true
+    }
+  });
+
+  if (!participant || participant.eventId !== Number(eventId)) {
+    const err = new Error('Participation not found');
+    err.code = 'PARTICIPATION_NOT_FOUND';
+    throw err;
+  }
+
+  const isCreator = participant.event.createdById === actorId;
+  const isSelf = participant.userId === actorId;
+
+  if (!isCreator && !isSelf) {
+    const err = new Error('Forbidden');
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+
+  await prisma.eventParticipant.delete({ where: { id: participant.id } });
+  return { success: true };
+}
+
 module.exports = {
   listEvents,
   createEventForUser,
@@ -233,5 +313,8 @@ module.exports = {
   listEventsForUser,
   getUpcomingEvents,
   getPastEvents,
-  updateEvent
+  updateEvent,
+  deleteEvent,
+  updateParticipationStatus,
+  removeParticipant
 };
